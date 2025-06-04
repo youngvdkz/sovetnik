@@ -172,7 +172,7 @@ class MessageHandlers:
                     )
                 else:
                     # Прямая обработка аудио
-                    await thinking_message.edit_text("Уху...")
+                    await thinking_message.edit_text("🦉 Уху...")
                     
                     try:
                         full_answer, short_answer = await self.gemini_service.process_audio_with_context(
@@ -305,7 +305,7 @@ class MessageHandlers:
         logger.info(f"Транскрипция завершена ({transcription_method}): {text}")
         
         # Обновляем статус
-        await thinking_message.edit_text("Уху...")
+        await thinking_message.edit_text("🦉 Уху...")
         
         # Обрабатываем вопрос
         full_answer, short_answer = await self.gemini_service.process_with_context(text, context_string)

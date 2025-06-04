@@ -119,7 +119,7 @@ Red Teaming.
         MAX_CONTEXT_MESSAGES = 100
     
     # Модель Gemini
-    GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-flash-preview-05-20')
+    GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-2.5-pro-preview-05-06')
     
     # Лимиты сообщений
     MESSAGE_LENGTH_LIMIT = 4000
