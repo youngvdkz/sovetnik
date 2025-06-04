@@ -1,0 +1,26 @@
+# Простая версия для персонального бота
+# Только бот + SQLite (без PostgreSQL, Redis, мониторинга)
+
+version: '3.8'
+
+services:
+  telegram-bot:
+    build: .
+    container_name: my_telegram_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Папка для SQLite базы данных и логов
+      - ./data:/app/data
+      # Для разработки - можно раскомментировать
+      # - ./:/app
+    environment:
+      - PYTHONPATH=/app
+      - PYTHONUNBUFFERED=1
+    ports:
+      # Если захотите добавить веб-интерфейс
+      - "8000:8000"
+
+# Для SQLite не нужны внешние сервисы!
+# Всё в одном файле data/bot.db 
