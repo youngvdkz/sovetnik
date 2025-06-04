@@ -2,21 +2,24 @@ services:
   - type: web
     name: telegram-bot-adviser
     env: python
-    plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: python main.py
+    startCommand: python app.py
+    plan: free
+    healthCheckPath: /
     envVars:
       - key: TELEGRAM_BOT_TOKEN
         sync: false
-      - key: GEMINI_API_KEY  
+      - key: GEMINI_API_KEY
         sync: false
       - key: GEMINI_MODEL
-        value: gemini-2.0-flash-exp
+        value: gemini-2.5-flash-preview-05-20
       - key: AUDIO_PROCESSING_MODE
-        value: gemini_direct
+        value: voice_recognition
       - key: TRANSCRIPTION_MODE
-        value: gemini_direct
+        value: google_speech
       - key: MAX_CONTEXT_MESSAGES
         value: "10"
       - key: MESSAGE_LENGTH_LIMIT
-        value: "4000" 
+        value: "4000"
+      - key: LOG_LEVEL
+        value: INFO 
