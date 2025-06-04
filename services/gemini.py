@@ -235,50 +235,63 @@ class GeminiService:
         Returns:
             tuple: (полный_ответ, краткий_ответ)
         """
+        temp_path = None
+        audio_file = None
+        
         try:
             import tempfile
             import os
+            
+            logger.info(f"🎧 Начинаем прямую обработку аудио, размер: {len(audio_data)} байт")
             
             # Создаем временный файл с правильным расширением
             with tempfile.NamedTemporaryFile(suffix=".oga", delete=False) as temp_file:
                 temp_file.write(audio_data)
                 temp_path = temp_file.name
             
-            logger.info(f"Загружаем аудиофайл в Gemini: размер {len(audio_data)} байт")
+            logger.info(f"📁 Временный файл создан: {temp_path}")
             
             # Загружаем аудио в Gemini с указанием MIME-типа
             try:
+                logger.info("⬆️ Загружаем аудиофайл в Gemini API...")
                 audio_file = genai.upload_file(
                     path=temp_path,
                     mime_type="audio/ogg"  # Указываем правильный MIME-тип
                 )
+                logger.info(f"✅ Файл загружен в Gemini: {audio_file.name}")
             except Exception as upload_error:
-                logger.warning(f"Ошибка загрузки с MIME audio/ogg: {upload_error}")
-                # Пробуем без указания MIME-типа
-                audio_file = genai.upload_file(path=temp_path)
+                logger.warning(f"⚠️ Ошибка загрузки с MIME audio/ogg: {upload_error}")
+                logger.info("🔄 Пробуем загрузить без указания MIME-типа...")
+                try:
+                    audio_file = genai.upload_file(path=temp_path)
+                    logger.info(f"✅ Файл загружен без MIME-типа: {audio_file.name}")
+                except Exception as second_upload_error:
+                    logger.error(f"❌ Критическая ошибка загрузки: {second_upload_error}")
+                    raise second_upload_error
             
             # Ожидаем завершения обработки файла
             import time
             max_wait_time = 30  # Максимальное время ожидания
             waited_time = 0
             
+            logger.info("⏳ Ожидаем обработки файла в Gemini...")
             while audio_file.state.name == "PROCESSING" and waited_time < max_wait_time:
                 time.sleep(2)
                 waited_time += 2
                 audio_file = genai.get_file(audio_file.name)
-                logger.debug(f"Ожидание обработки аудио: {waited_time}s")
+                logger.debug(f"⏱️ Ожидание обработки аудио: {waited_time}s, статус: {audio_file.state.name}")
             
             if audio_file.state.name == "FAILED":
-                logger.error(f"Ошибка обработки аудиофайла в Gemini: {audio_file.state}")
-                error_msg = "Извините, произошла ошибка при обработке аудио. Попробуйте позже."
+                logger.error(f"❌ Ошибка обработки аудиофайла в Gemini: {audio_file.state}")
+                error_msg = "Извините, произошла ошибка при обработке аудио. Попробуйте записать сообщение заново."
                 return error_msg, error_msg
             
             if audio_file.state.name == "PROCESSING":
-                logger.error(f"Таймаут при обработке аудиофайла в Gemini после {max_wait_time}s")
-                error_msg = "Извините, обработка аудио заняла слишком много времени. Попробуйте позже."
+                logger.error(f"⏰ Таймаут при обработке аудиофайла в Gemini после {max_wait_time}s")
+                error_msg = "Извините, обработка аудио заняла слишком много времени. Попробуйте записать более короткое сообщение."
                 return error_msg, error_msg
             
-            logger.info(f"Аудиофайл успешно обработан Gemini: {audio_file.state.name}")
+            logger.info(f"✅ Аудиофайл успешно обработан Gemini: {audio_file.state.name}")
             
             # Этап 1: Генерируем развернутый ответ напрямую с аудио
             audio_prompt = f"""{Config.MAIN_PROMPT}
@@ -292,36 +305,61 @@ class GeminiService:
 
 Сначала транскрибируй аудио, затем дай развернутый ответ на вопрос пользователя."""
 
-            logger.info("Генерируем ответ с помощью Gemini...")
-            response1 = self.model.generate_content([audio_prompt, audio_file])
+            logger.info("🤖 Генерируем ответ с помощью Gemini...")
+            try:
+                response1 = self.model.generate_content([audio_prompt, audio_file])
+                logger.info("✅ Первый этап (развернутый ответ) завершен")
+            except Exception as generation_error:
+                logger.error(f"❌ Ошибка генерации контента: {generation_error}")
+                raise generation_error
             
             if not response1.text:
-                logger.error("Gemini вернул пустой ответ")
-                error_msg = "Извините, не удалось обработать ваше голосовое сообщение."
+                logger.error("❌ Gemini вернул пустой ответ")
+                error_msg = "Извините, не удалось обработать ваше голосовое сообщение. Попробуйте записать его заново или говорить громче и четче."
                 return error_msg, error_msg
             
             full_answer = response1.text
+            logger.info(f"📝 Получен полный ответ, длина: {len(full_answer)} символов")
 
             # Этап 2: Сокращаем ответ
-            summary_prompt = f"{Config.SUMMARY_PROMPT}\n\nТекст для сокращения: {full_answer}"
-            response2 = self.model.generate_content(summary_prompt)
-            short_answer = response2.text if response2.text else full_answer
-
-            # Удаляем файлы
             try:
-                os.unlink(temp_path)
-                genai.delete_file(audio_file.name)
-            except Exception as cleanup_error:
-                logger.warning(f"Ошибка при очистке файлов: {cleanup_error}")
+                logger.info("✂️ Сокращаем ответ...")
+                summary_prompt = f"{Config.SUMMARY_PROMPT}\n\nТекст для сокращения: {full_answer}"
+                response2 = self.model.generate_content(summary_prompt)
+                short_answer = response2.text if response2.text else full_answer
+                logger.info("✅ Второй этап (сокращение) завершен")
+            except Exception as summary_error:
+                logger.warning(f"⚠️ Ошибка сокращения ответа: {summary_error}")
+                # Если сокращение не удалось, используем полный ответ
+                short_answer = full_answer
             
-            logger.info(f"Прямая обработка аудио завершена успешно")
+            logger.info(f"🎉 Прямая обработка аудио завершена успешно!")
             
             return full_answer, short_answer
 
         except Exception as e:
-            logger.error(f"Ошибка при прямой обработке аудио через Gemini: {e}")
-            error_msg = "Извините, произошла ошибка при обработке вашего голосового сообщения. Попробуйте позже."
+            logger.error(f"💥 КРИТИЧЕСКАЯ ОШИБКА при прямой обработке аудио: {type(e).__name__}: {e}")
+            import traceback
+            logger.error(f"📋 Traceback: {traceback.format_exc()}")
+            
+            error_msg = "Извините, произошла техническая ошибка при обработке вашего голосового сообщения. Попробуйте отправить текстовое сообщение или записать аудио заново."
             return error_msg, error_msg
+            
+        finally:
+            # Очистка ресурсов
+            try:
+                if temp_path and os.path.exists(temp_path):
+                    os.unlink(temp_path)
+                    logger.debug("🗑️ Временный файл удален")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ Ошибка удаления временного файла: {cleanup_error}")
+            
+            try:
+                if audio_file:
+                    genai.delete_file(audio_file.name)
+                    logger.debug("🗑️ Файл удален из Gemini")
+            except Exception as cleanup_error:
+                logger.warning(f"⚠️ Ошибка удаления файла из Gemini: {cleanup_error}")
 
     async def extract_transcription_from_response(self, response_text: str) -> str:
         """

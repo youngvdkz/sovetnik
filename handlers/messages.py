@@ -172,7 +172,7 @@ class MessageHandlers:
                     )
                 else:
                     # Прямая обработка аудио
-                    await thinking_message.edit_text("🦉 Уху...")
+                    await thinking_message.edit_text("🦉 Уху... обрабатываю аудио...")
                     
                     try:
                         full_answer, short_answer = await self.gemini_service.process_audio_with_context(
@@ -248,7 +248,10 @@ class MessageHandlers:
     async def _process_with_transcription(self, update, thinking_message, audio_data, voice, context_string, user_id):
         """Вспомогательный метод для обработки через транскрипцию (старый режим)"""
         # Обновляем статус
-        await thinking_message.edit_text("🦉 Уху...")
+        try:
+            await thinking_message.edit_text("🦉 Уху... транскрибирую...")
+        except Exception as edit_error:
+            logger.warning(f"Ошибка обновления статуса: {edit_error}")
         
         text = None
         transcription_method = "unknown"
@@ -273,39 +276,59 @@ class MessageHandlers:
         
         if not use_gemini:
             # Используем Google Speech API
-            await thinking_message.edit_text("🦉 Уху...")
+            try:
+                await thinking_message.edit_text("🦉 Уху... использую Google Speech...")
+            except Exception as edit_error:
+                logger.warning(f"Ошибка обновления статуса: {edit_error}")
             text = await self.speech_service.transcribe_audio_simple(bytes(audio_data))
             transcription_method = "Google Speech API"
         else:
             # Сначала пробуем Gemini (основной метод)
             try:
-                await thinking_message.edit_text("🦉 Уху...")
+                try:
+                    await thinking_message.edit_text("🦉 Уху... использую Gemini...")
+                except Exception as edit_error:
+                    logger.warning(f"Ошибка обновления статуса: {edit_error}")
                 text = await self.gemini_service.transcribe_audio(bytes(audio_data))
                 transcription_method = "Gemini"
                 
                 if not text and Config.TRANSCRIPTION_MODE != "gemini_only":
                     logger.warning("Gemini вернул пустой результат - переключаемся на Speech API")
-                    await thinking_message.edit_text("🦉 Уху...")
+                    try:
+                        await thinking_message.edit_text("🦉 Уху... переключаюсь на Speech API...")
+                    except Exception as edit_error:
+                        logger.warning(f"Ошибка обновления статуса: {edit_error}")
                     text = await self.speech_service.transcribe_audio_simple(bytes(audio_data))
                     transcription_method = "Google Speech API (fallback)"
                     
             except Exception as e:
                 logger.warning(f"Ошибка в Gemini транскрипции: {e}")
                 if Config.TRANSCRIPTION_MODE != "gemini_only":
-                    await thinking_message.edit_text("🦉 Уху...")
+                    try:
+                        await thinking_message.edit_text("🦉 Уху... пробую Speech API...")
+                    except Exception as edit_error:
+                        logger.warning(f"Ошибка обновления статуса: {edit_error}")
                     text = await self.speech_service.transcribe_audio_simple(bytes(audio_data))
                     transcription_method = "Google Speech API (error fallback)"
                 else:
                     text = None
         
         if not text:
-            await thinking_message.edit_text("❌ Не удалось распознать речь. Попробуйте записать сообщение заново или улучшить качество звука.")
+            try:
+                await thinking_message.edit_text("❌ Не удалось распознать речь. Попробуйте записать сообщение заново или улучшить качество звука.")
+            except Exception as edit_error:
+                logger.warning(f"Ошибка обновления статуса: {edit_error}")
+                await thinking_message.delete()
+                await update.message.reply_text("❌ Не удалось распознать речь. Попробуйте записать сообщение заново или улучшить качество звука.")
             return
         
         logger.info(f"Транскрипция завершена ({transcription_method}): {text}")
         
         # Обновляем статус
-        await thinking_message.edit_text("🦉 Уху...")
+        try:
+            await thinking_message.edit_text("🦉 Уху... генерирую ответ...")
+        except Exception as edit_error:
+            logger.warning(f"Ошибка обновления статуса: {edit_error}")
         
         # Обрабатываем вопрос
         full_answer, short_answer = await self.gemini_service.process_with_context(text, context_string)
