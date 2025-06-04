@@ -4,6 +4,7 @@ Flask wrapper для запуска Telegram бота на Render.com
 
 import threading
 import time
+import asyncio
 from flask import Flask, jsonify
 from main import main as run_bot
 import logging
@@ -39,13 +40,19 @@ def status():
     return jsonify(bot_status)
 
 def run_telegram_bot():
-    """Запуск Telegram бота в отдельном потоке"""
+    """Запуск Telegram бота в отдельном потоке с event loop"""
     try:
         bot_status['running'] = True
         bot_status['start_time'] = time.time()
         bot_status['last_activity'] = time.time()
         
         logger.info("🚀 Запускаю Telegram бота...")
+        
+        # Создаем новый event loop для этого потока
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        # Запускаем бота
         run_bot()
         
     except Exception as e:
