@@ -172,7 +172,7 @@ class MessageHandlers:
                     )
                 else:
                     # Прямая обработка аудио
-                    await thinking_message.edit_text("🦉 Уху... обрабатываю аудио...")
+                    await thinking_message.edit_text("🦉 Уху...")
                     
                     try:
                         full_answer, short_answer = await self.gemini_service.process_audio_with_context(
