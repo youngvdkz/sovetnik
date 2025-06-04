@@ -4,7 +4,6 @@ Flask wrapper для запуска Telegram бота на Render.com
 
 import threading
 import time
-import asyncio
 from flask import Flask, jsonify
 from main import main as run_bot
 import logging
@@ -39,33 +38,38 @@ def status():
     """Детальный статус бота"""
     return jsonify(bot_status)
 
-def run_telegram_bot():
-    """Запуск Telegram бота в отдельном потоке с event loop"""
+def run_flask_server():
+    """Запуск Flask сервера в отдельном потоке"""
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port, debug=False, use_reloader=False)
+
+def main():
+    """Главная функция - запуск Flask в потоке, Telegram bot в главном потоке"""
     try:
+        # Запускаем Flask сервер в отдельном потоке
+        flask_thread = threading.Thread(target=run_flask_server, daemon=True)
+        flask_thread.start()
+        
+        logger.info("🌐 Flask сервер запущен в отдельном потоке")
+        time.sleep(2)  # Даем Flask время запуститься
+        
+        # Обновляем статус
         bot_status['running'] = True
         bot_status['start_time'] = time.time()
         bot_status['last_activity'] = time.time()
         
-        logger.info("🚀 Запускаю Telegram бота...")
+        logger.info("🚀 Запускаю Telegram бота в главном потоке...")
         
-        # Создаем новый event loop для этого потока
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
-        # Запускаем бота
+        # Запускаем Telegram бота в главном потоке
         run_bot()
         
+    except KeyboardInterrupt:
+        logger.info("⛔ Сервис остановлен пользователем")
+        bot_status['running'] = False
     except Exception as e:
-        logger.error(f"❌ Ошибка в Telegram боте: {e}")
+        logger.error(f"❌ Критическая ошибка: {e}")
         bot_status['running'] = False
-    finally:
-        bot_status['running'] = False
+        raise
 
 if __name__ == '__main__':
-    # Запускаем Telegram бота в отдельном потоке
-    bot_thread = threading.Thread(target=run_telegram_bot, daemon=True)
-    bot_thread.start()
-    
-    # Запускаем Flask сервер для health checks
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port, debug=False) 
+    main() 
